@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Mavis Lab 城市定向</title>
+
+  <style>
+    :root{
+      --black:#141414;
+      --red:#EE2922;
+      --blue:#2563EB;
+      --green:#16A34A;
+      --yellow:#FBBF16;
+      --white:#fff;
+      --light:#F5F5F5;
+      --mid:#e6e6e6;
+      --text:#2f2f2f;
+
+      --safe-top: env(safe-area-inset-top);
+      --safe-bottom: env(safe-area-inset-bottom);
+
+      --radius: 18px;
+      --shadow: 0 10px 26px rgba(0,0,0,0.08);
+      --shadow-strong: 6px 6px 0 rgba(0,0,0,0.9);
+      --stroke: 2.5px solid var(--black);
+    }
+
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Roboto","Segoe UI",Arial,sans-serif;background:var(--light);color:var(--text)}
+    button,input{font-family:inherit}
+
+    #app{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      padding-top:var(--safe-top);
+      padding-bottom:var(--safe-bottom);
+      overflow:hidden;
+    }
+
+    /* ===== HEADER (tap to home) ===== */
+    header{
+      flex-shrink:0;
+      background:var(--black);
+      color:var(--white);
+      padding:12px 14px;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:10px;
+      position:relative;
+      z-index:50;
+    }
+    .header-tap{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .header-tap:active{opacity:.9}
+    .header-mickey{position:relative;width:34px;height:30px}
+    .header-mickey .hd{width:20px;height:20px;background:var(--white);border-radius:50%;position:absolute;bottom:0;left:7px}
+    .header-mickey .el,.header-mickey .er{width:12px;height:12px;background:var(--white);border-radius:50%;position:absolute;top:0}
+    .header-mickey .el{left:2px}
+    .header-mickey .er{right:2px}
+    header h1{margin:0;font-size:16px;font-weight:900;letter-spacing:.8px}
+
+    /* ===== TRANSITIONS (fade + blur) ===== */
+    .page{
+      display:none;
+      flex:1;
+      width:100%;
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+      padding:0 0 10px;
+    }
+    .page.active{display:block}
+
+    .page-inner{
+      min-height:100%;
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      animation: pageIn .38s ease both;
+    }
+    .page.exiting .page-inner{animation: pageOut .22s ease both}
+
+    @keyframes pageIn{
+      from{opacity:0;filter:blur(10px);transform:translateY(10px)}
+      to{opacity:1;filter:blur(0);transform:translateY(0)}
+    }
+    @keyframes pageOut{
+      from{opacity:1;filter:blur(0);transform:translateY(0)}
+      to{opacity:0;filter:blur(10px);transform:translateY(6px)}
+    }
+
+    /* ===== COMMON ===== */
+    .container{width:100%;max-width:420px;padding:18px 18px 26px}
+    .btn{
+      width:100%;
+      max-width:340px;
+      height:54px;
+      border-radius:999px;
+      border:none;
+      font-size:16px;
+      font-weight:900;
+      letter-spacing:.2px;
+      cursor:pointer;
+      transition:transform .12s, box-shadow .12s, filter .12s;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
+    }
+    .btn:active{transform:translate(3px,3px)}
+    .btn-red{background:var(--red);color:#fff;box-shadow:4px 4px 0 #9e1a11}
+    .btn-yellow{background:var(--yellow);color:var(--black);box-shadow:4px 4px 0 #c09000}
+    .btn-ghost{
+      background:transparent;
+      border:1.5px solid #d8d8d8;
+      color:#999;
+      height:42px;
+      max-width:220px;
+      font-size:14px;
+      box-shadow:none;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:7px 12px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:900;
+      letter-spacing:.4px;
+      background:rgba(251,191,22,.18);
+      color:var(--yellow);
+      border:1.5px solid rgba(251,191,22,.35);
+      white-space:nowrap;
+    }
+
+    .card{
+      background:var(--white);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:18px;
+      width:100%;
+    }
+
+    .section-title{
+      margin:0 0 10px;
+      font-size:15px;
+      font-weight:950;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .muted{color:#666;font-size:13px;line-height:1.75;margin:0}
+    ul{margin:0;padding-left:18px}
+    li{font-size:13px;line-height:1.75;color:#555}
+
+    /* ===== NAME GATE ===== */
+    .gate-hero{
+      width:100%;
+      background:linear-gradient(135deg, #111, #1c1c1c);
+      color:#fff;
+      padding:34px 18px 18px;
+      text-align:center;
+    }
+    .gate-hero h2{margin:0 0 6px;font-size:26px;font-weight:1000;letter-spacing:1px;color:var(--yellow)}
+    .gate-hero p{margin:0;color:rgba(255,255,255,.7);font-size:13px;line-height:1.6}
+
+    .field{
+      width:100%;
+      max-width:420px;
+      padding:0 18px;
+      margin-top:-10px;
+    }
+    .input{
+      width:100%;
+      height:54px;
+      border-radius:16px;
+      border:2px solid #e5e5e5;
+      padding:0 16px;
+      font-size:16px;
+      background:#fff;
+      outline:none;
+      box-shadow:0 2px 10px rgba(0,0,0,.06);
+    }
+    .input:focus{border-color:rgba(37,99,235,.5)}
+    .hint{font-size:12px;color:#888;margin:10px 6px 0}
+
+    /* ===== HOME ===== */
+    .home-hero{
+      width:100%;
+      background:var(--black);
+      padding:22px 18px 14px;
+      text-align:center;
+      position:relative;
+    }
+    .home-hero h2{
+      margin:6px 0 2px;
+      font-size:32px;
+      font-weight:1000;
+      letter-spacing:2px;
+      color:var(--yellow);
+    }
+    .home-hero p{margin:0;color:rgba(255,255,255,.7);font-size:13px;line-height:1.6}
+    .home-wave{
+      width:100%;
+      height:44px;
+      background:var(--black);
+      position:relative;
+      margin-top:-1px;
+    }
+    .home-wave:after{
+      content:"";
+      position:absolute;
+      bottom:0;left:0;right:0;
+      height:44px;
+      background:var(--light);
+      border-radius:50% 50% 0 0 / 44px;
+    }
+    .big-mickey-wrap{
+      width:100%;
+      display:flex;
+      justify-content:center;
+      margin-top:-26px;
+      position:relative;
+      z-index:5;
+      pointer-events:none;
+    }
+    .big-mickey{
+      position:relative;
+      width:128px;
+      height:116px;
+    }
+    .big-mickey .ear{
+      width:52px;height:52px;
+      background:var(--black);
+      border:4px solid var(--yellow);
+      border-radius:50%;
+      position:absolute;top:0;
+    }
+    .big-mickey .ear.left{left:4px}
+    .big-mickey .ear.right{right:4px}
+    .big-mickey .head{
+      width:88px;height:88px;
+      background:var(--black);
+      border:4px solid var(--yellow);
+      border-radius:50%;
+      position:absolute;bottom:0;
+      left:50%;transform:translateX(-50%);
+    }
+
+    .home-meta{
+      margin:12px auto 0;
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .info-card{border-left:6px solid var(--red)}
+    .info-card.blue{border-left-color:var(--blue)}
+    .info-card.green{border-left-color:var(--green)}
+
+    .info-card .section-title{color:var(--red)}
+    .info-card.blue .section-title{color:var(--blue)}
+    .info-card.green .section-title{color:var(--green)}
+
+    /* ===== ROUTES ===== */
+    .route-hero{
+      width:100%;
+      padding:34px 18px 20px;
+      background:linear-gradient(135deg, var(--red), #b11c16);
+      color:#fff;
+      text-align:center;
+    }
+    .route-hero h2{margin:0 0 6px;font-size:22px;font-weight:1000}
+    .route-hero p{margin:0;opacity:.85;font-size:13px}
+    .route-card{
+      width:100%;
+      border-radius:18px;
+      background:#fff;
+      border:var(--stroke);
+      box-shadow:var(--shadow-strong);
+      padding:18px 18px;
+      display:flex;
+      align-items:center;
+      gap:14px;
+      cursor:pointer;
+      user-select:none;
+      transition:transform .12s, box-shadow .12s;
+    }
+    .route-card:active{transform:translate(4px,4px);box-shadow:2px 2px 0 rgba(0,0,0,.9)}
+    .route-icon{
+      width:52px;height:52px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:24px;flex-shrink:0;color:#fff;
+    }
+    .route-icon.hk{background:var(--red)}
+    .route-icon.nt{background:var(--yellow);color:var(--black)}
+    .route-text h3{margin:0 0 4px;font-size:16px;font-weight:950}
+    .route-text p{margin:0;font-size:12px;color:#777}
+
+    /* ===== STATION LIST ===== */
+    .list-hero{
+      width:100%;
+      background:var(--black);
+      padding:26px 18px 18px;
+      text-align:center;
+      color:#fff;
+    }
+    .list-hero h2{margin:0 0 6px;font-size:20px;font-weight:1000;color:var(--yellow)}
+    .list-hero p{margin:0;opacity:.75;font-size:12px}
+
+    .station-item{
+      width:100%;
+      background:#fff;
+      border-radius:16px;
+      border:2px solid var(--mid);
+      padding:14px 14px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      cursor:pointer;
+      box-shadow:0 2px 10px rgba(0,0,0,.06);
+      user-select:none;
+      transition:transform .12s, border-color .12s, filter .2s;
+    }
+    .station-item:active{transform:scale(.985)}
+    .station-num{
+      width:40px;height:40px;border-radius:50%;
+      background:var(--red);
+      color:#fff;
+      font-weight:1000;
+      display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;
+    }
+    .station-title{margin:0;font-size:14px;font-weight:950}
+    .station-sub{margin:2px 0 0;font-size:12px;color:#888}
+    .arrow{margin-left:auto;color:#cfcfcf;font-size:18px}
+
+    /* ===== STATION DETAIL ===== */
+    .back{
+      width:100%;
+      max-width:420px;
+      padding:14px 18px 0;
+      border:none;
+      background:none;
+      color:#888;
+      font-size:13px;
+      cursor:pointer;
+      text-align:left;
+    }
+
+    .img-placeholder{
+      width:100%;
+      height:200px;
+      background:var(--mid);
+      border-bottom:2px dashed #bdbdbd;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#8e8e8e;
+      font-size:13px;
+    }
+
+    .detail-title{margin:0 0 8px;font-size:20px;font-weight:1000;color:var(--red)}
+    .divider{width:calc(100% - 36px);border:none;border-top:2px dashed var(--mid);margin:18px auto}
+
+    .hint-card{
+      border:2px solid rgba(37,99,235,.18);
+      background:linear-gradient(180deg, rgba(37,99,235,.08), rgba(37,99,235,.03));
+    }
+    .hint-card .section-title{color:var(--blue)}
+
+    .quiz-card{
+      border:var(--stroke);
+      box-shadow:var(--shadow-strong);
+    }
+    .quiz-label{
+      font-size:11px;font-weight:1000;letter-spacing:2px;color:var(--red);
+      margin:0 0 8px;
+      display:flex;align-items:center;gap:6px;
+    }
+    .q-title{margin:0 0 14px;font-size:15px;font-weight:900;line-height:1.55;color:var(--black)}
+    .opt{
+      width:100%;
+      padding:12px 12px;
+      margin:8px 0;
+      border-radius:12px;
+      border:2px solid transparent;
+      background:var(--light);
+      cursor:pointer;
+      text-align:left;
+      font-size:14px;
+      transition:transform .12s, filter .12s, background .12s, border-color .12s;
+      user-select:none;
+    }
+    .opt:active{transform:scale(.99)}
+    .opt.correct{background:#d4f7d4;border-color:#2e9e2e;color:#1a6e1a;font-weight:900}
+    .opt.disabled{cursor:not-allowed;opacity:.45;filter:grayscale(100%)}
+    .feedback{min-height:22px;margin-top:10px;font-weight:900;text-align:center;font-size:14px}
+    .feedback.ok{color:#2e9e2e}
+    .feedback.lock{color:#b25f00}
+
+    /* LOCK / UNLOCK (blur sections) */
+    .locked .lock-blur{
+      filter: blur(8px);
+      opacity: .55;
+      pointer-events: none;
+      user-select: none;
+    }
+    .lock-banner{
+      margin:10px 18px 0;
+      width:calc(100% - 36px);
+      max-width:420px;
+      background:rgba(251,191,22,.18);
+      border:1.5px solid rgba(251,191,22,.4);
+      color:#8a5f00;
+      padding:10px 12px;
+      border-radius:14px;
+      font-size:13px;
+      font-weight:900;
+      display:none;
+    }
+    .locked .lock-banner{display:block}
+
+    /* ===== FINISH ===== */
+    #page-finish{background:#0d0d0d}
+    .finish-inner{
+      min-height:100%;
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      padding:40px 18px 54px;
+    }
+    .celebrate{
+      position:relative;width:160px;height:144px;margin:0 0 18px;
+      animation:bounce .9s ease-in-out infinite alternate;
+    }
+    @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-14px)}}
+    .celebrate .ear{
+      width:60px;height:60px;border-radius:50%;
+      background:#0d0d0d;border:4px solid var(--yellow);
+      position:absolute;top:0;
+      animation:wiggle 1.4s ease-in-out infinite;
+    }
+    .celebrate .ear.left{left:6px}
+    .celebrate .ear.right{right:6px;animation-direction:reverse}
+    .celebrate .head{
+      width:106px;height:106px;border-radius:50%;
+      background:#0d0d0d;border:4px solid var(--yellow);
+      position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+    }
+    @keyframes wiggle{0%,100%{transform:rotate(0)}30%{transform:rotate(-12deg)}70%{transform:rotate(12deg)}}
+
+    .finish-title{margin:0 0 8px;font-size:28px;font-weight:1000;color:var(--yellow);letter-spacing:2px}
+    .finish-sub{margin:0 0 22px;font-size:14px;line-height:1.75;color:rgba(255,255,255,.68)}
+    .cert-trigger{
+      width:100%;
+      max-width:340px;
+      border-radius:18px;
+      padding:18px;
+      background:linear-gradient(145deg, #fffbea, #fff5c8);
+      border:2.5px solid var(--yellow);
+      box-shadow:0 0 0 7px rgba(251,191,22,.14), 4px 4px 0 rgba(251,191,22,.35);
+      cursor:pointer;
+      user-select:none;
+      transition:transform .12s, filter .12s;
+      margin-bottom:18px;
+    }
+    .cert-trigger:active{transform:scale(.98)}
+    .ct-title{font-size:15px;font-weight:1000;color:#7a5c00;margin:6px 0 4px}
+    .ct-sub{font-size:12px;color:#9a7610;margin:0}
+    .ct-tag{
+      display:inline-block;margin-top:10px;
+      font-size:11px;font-weight:1000;letter-spacing:1px;
+      color:var(--yellow);
+      background:var(--black);
+      padding:5px 12px;border-radius:999px;
+    }
+
+    /* Certificate modal */
+    #cert-modal{
+      position:fixed;top:0;left:0;width:100%;height:100%;
+      display:none;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.90);
+      z-index:200;
+      padding:18px;
+    }
+    #cert-modal.active{display:flex}
+    .cert-paper{
+      width:100%;
+      max-width:360px;
+      background:#fffdf0;
+      border-radius:22px;
+      padding:30px 22px 22px;
+      position:relative;
+      box-shadow:0 0 0 4px var(--yellow), 0 0 0 9px rgba(251,191,22,.18);
+      text-align:center;
+    }
+    .cert-paper:before{
+      content:"";
+      position:absolute;top:10px;left:10px;right:10px;bottom:10px;
+      border:1.5px dashed rgba(251,191,22,.55);
+      border-radius:16px;
+      pointer-events:none;
+    }
+    .cert-org{font-size:11px;font-weight:1000;letter-spacing:3px;color:#999;margin-bottom:8px}
+    .cert-title{margin:0 0 6px;font-size:22px;font-weight:1000;color:var(--black);letter-spacing:1px}
+    .cert-sub{font-size:11px;color:#999;letter-spacing:1px;margin-bottom:16px}
+    .cert-body{
+      background:rgba(251,191,22,.10);
+      border-radius:14px;
+      padding:14px 12px;
+      color:#444;
+      font-size:13px;
+      line-height:1.85;
+      margin-bottom:14px;
+    }
+    .cert-body strong{display:block;font-size:15px;color:var(--black);margin-bottom:6px}
+    .cert-stamp{
+      width:76px;height:76px;border-radius:50%;
+      border:3px solid var(--red);
+      display:flex;align-items:center;justify-content:center;
+      flex-direction:column;
+      margin:0 auto 12px;
+      color:var(--red);
+      font-size:9px;font-weight:1000;letter-spacing:1px;
+      line-height:1.25;
+      transform:rotate(-12deg);
+      box-shadow:inset 0 0 0 2px rgba(238,41,34,.12);
+    }
+    .cert-stamp span{font-size:16px;display:block;margin-bottom:2px}
+    .cert-meta{font-size:11px;color:#bbb;margin:0 0 14px}
+    .cert-actions{
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+      position:relative;
+      z-index:2;
+    }
+    .btn-mini{
+      height:42px;
+      max-width:168px;
+      font-size:14px;
+      box-shadow:none;
+      border-radius:999px;
+      padding:0 14px;
+    }
+    .btn-black{background:var(--black);color:#fff}
+    .btn-outline{
+      background:transparent;
+      border:2px solid rgba(0,0,0,.16);
+      color:#555;
+    }
+
+    .hidden{display:none!important}
+  </style>
+</head>
+
+<body>
+<div id="app">
+  <header>
+    <div class="header-tap" onclick="goHome()">
+      <div class="header-mickey"><div class="el"></div><div class="er"></div><div class="hd"></div></div>
+      <h1>Mavis Lab 城市定向</h1>
+    </div>
+  </header>
+
+  <!-- PAGE: NAME GATE -->
+  <section id="page-gate" class="page active">
+    <div class="page-inner">
+      <div class="gate-hero">
+        <h2>進入挑戰</h2>
+        <p>請先輸入你的姓名／別名<br>用於完成證書顯示</p>
+      </div>
+
+      <div class="field">
+        <input id="player-name" class="input" type="text" maxlength="20" placeholder="例如：阿明 / MavisFans" autocomplete="name" />
+        <div class="hint">小提示：可輸入暱稱，最多 20 字。</div>
+      </div>
+
+      <div class="container" style="padding-top:14px">
+        <button class="btn btn-red" onclick="enterSite()">✅ 進入主頁</button>
+        <div class="muted" style="text-align:center;margin-top:10px">
+          進入後可隨時在上方「Mavis Lab」返回首頁
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: HOME -->
+  <section id="page-home" class="page">
+    <div class="page-inner">
+      <div class="home-hero">
+        <div class="home-meta">
+          <span class="pill">日期：2026 / xx / xx</span>
+          <span class="pill">時間：xx:xx – xx:xx</span>
+        </div>
+
+        <h2>城市定向</h2>
+        <p>探索城市角落，找到站點地標，完成答題挑戰</p>
+      </div>
+
+      <div class="home-wave"></div>
+
+      <div class="big-mickey-wrap" aria-hidden="true">
+        <div class="big-mickey">
+          <div class="ear left"></div>
+          <div class="ear right"></div>
+          <div class="head"></div>
+        </div>
+      </div>
+
+      <div class="container" style="padding-top:10px">
+        <div class="card info-card">
+          <h3 class="section-title">🗺️ 關於活動</h3>
+          <p class="muted">活動以「找到地標」為核心：到達每個站點後，先觀察現場提示，找到指定地標，再完成一題問答即可通關。</p>
+        </div>
+
+        <div class="card info-card blue" style="margin-top:14px">
+          <h3 class="section-title">🎯 活動流程</h3>
+          <ul>
+            <li>選擇路線（港島綫 或 新界綫）。</li>
+            <li>按站點順序前往，根據提示找到地標。</li>
+            <li>完成問答後解鎖下一站的問答。</li>
+            <li>完成全線站點，即可領取證書並下載 PDF。</li>
+          </ul>
+        </div>
+
+        <div class="card info-card green" style="margin-top:14px">
+          <h3 class="section-title">⚠️ 注意事項</h3>
+          <ul>
+            <li>請注意個人安全，切勿進入禁止區域。</li>
+            <li>保持環境整潔，不要亂拋垃圾。</li>
+            <li>遇到緊急情況請立即聯絡負責人。</li>
+            <li>請帶備足夠飲用水，並適時補水。</li>
+            <li>建議塗抹防曬、戴帽；留意天氣與體感溫度。</li>
+            <li>小心路面情況，留意交通。</li>
+          </ul>
+        </div>
+
+        <div style="margin-top:18px;display:flex;justify-content:center">
+          <button class="btn btn-red" onclick="goToPage('page-routes')">🚀 開始挑戰</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: ROUTES -->
+  <section id="page-routes" class="page">
+    <div class="page-inner">
+      <div class="route-hero">
+        <h2>選擇路線</h2>
+        <p>你可以隨時查看後面的站點，但問答需逐站解鎖</p>
+      </div>
+
+      <div class="container" style="display:flex;flex-direction:column;gap:14px">
+        <div class="route-card" onclick="selectRoute('hk')">
+          <div class="route-icon hk">🏙️</div>
+          <div class="route-text">
+            <h3>港島綫</h3>
+            <p>3 個站點・城市地標探索</p>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+
+        <div class="route-card" onclick="selectRoute('nt')">
+          <div class="route-icon nt">🌿</div>
+          <div class="route-text">
+            <h3>新界綫</h3>
+            <p>3 個站點・郊區風景 + 地道文化</p>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+
+        <div style="display:flex;justify-content:center;margin-top:10px">
+          <button class="btn btn-ghost" onclick="goToPage('page-home')">← 返回首頁</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: STATION LIST -->
+  <section id="page-station-list" class="page">
+    <div class="page-inner">
+      <div class="list-hero">
+        <h2 id="list-route-name">路線</h2>
+        <p id="list-route-sub">共 3 個站點</p>
+      </div>
+
+      <div class="container" id="station-list-container" style="display:flex;flex-direction:column;gap:12px"></div>
+
+      <div class="container" style="padding-top:0;display:flex;justify-content:center">
+        <button class="btn btn-ghost" onclick="goToPage('page-routes')">← 返回路線選擇</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: STATION DETAIL -->
+  <section id="page-station-detail" class="page">
+    <div class="page-inner">
+      <button class="back" onclick="goToPage('page-station-list')">← 返回站點列表</button>
+
+      <div class="container" style="padding-top:10px">
+        <div class="img-placeholder"><span id="detail-img-alt">📷 站點圖片</span></div>
+
+        <div class="card" style="margin-top:14px">
+          <h2 class="detail-title" id="detail-name">站點名稱</h2>
+          <p class="muted" id="detail-destination">目的地：—</p>
+        </div>
+
+        <div id="lock-banner" class="lock-banner">🔒 未解鎖：請先完成上一個站點的問答</div>
+
+        <div id="detail-lock-scope">
+          <div class="card hint-card lock-blur" style="margin-top:14px">
+            <h3 class="section-title">💡 提示</h3>
+            <p class="muted" id="detail-hint">提示內容…</p>
+          </div>
+
+          <div class="card lock-blur" style="margin-top:14px">
+            <h3 class="section-title">📌 簡介</h3>
+            <p class="muted" id="detail-desc">站點介紹…</p>
+          </div>
+
+          <hr class="divider">
+
+          <div class="card quiz-card lock-blur" style="margin-top:0">
+            <div class="quiz-label">❓ 問答挑戰</div>
+            <h3 class="q-title" id="quiz-q">題目…</h3>
+            <div id="quiz-options-wrap"></div>
+            <div id="quiz-feedback" class="feedback"></div>
+
+            <button id="btn-next-station" class="btn btn-yellow hidden" style="margin-top:14px" onclick="goNextStation()">前往下一站 ➡️</button>
+            <button id="btn-finish" class="btn btn-red hidden" style="margin-top:14px" onclick="goToFinish()">🎉 完成挑戰！</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: FINISH -->
+  <section id="page-finish" class="page">
+    <div class="page-inner" style="background:#0d0d0d">
+      <div class="finish-inner">
+        <div class="celebrate" aria-hidden="true">
+          <div class="ear left"></div>
+          <div class="ear right"></div>
+          <div class="head"></div>
+        </div>
+        <h2 class="finish-title">挑戰完成！</h2>
+        <p class="finish-sub" id="finish-msg">你已成功征服所有站點！</p>
+
+        <div class="cert-trigger" onclick="openCert()">
+          <div style="font-size:34px">🏅</div>
+          <div class="ct-title">完成證書</div>
+          <p class="ct-sub">點擊查看 & 下載 PDF</p>
+          <span class="ct-tag">點擊開啟 ›</span>
+        </div>
+
+        <button class="btn btn-yellow" onclick="goToPage('page-home')">🏠 返回首頁</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CERTIFICATE MODAL -->
+  <div id="cert-modal" onclick="closeCert()">
+    <div class="cert-paper" onclick="event.stopPropagation()">
+      <div class="cert-org">MAVIS LAB</div>
+      <h2 class="cert-title">完 成 證 書</h2>
+      <div class="cert-sub">CERTIFICATE OF COMPLETION</div>
+
+      <div class="cert-body">
+        <strong>🏆 恭喜你！</strong>
+        <div>茲證明</div>
+        <div style="font-size:16px;font-weight:1000;color:#111;margin:6px 0" id="cert-name">（姓名）</div>
+        <div>已成功完成</div>
+        <div style="font-weight:1000;color:#111;margin-top:6px" id="cert-route">（路線）</div>
+        <div>全部挑戰站點</div>
+      </div>
+
+      <div class="cert-stamp"><span>✦</span>MAVIS<br>LAB<br>認證</div>
+
+      <p class="cert-meta" id="cert-date">日期：2026 / xx / xx</p>
+
+      <div class="cert-actions">
+        <button class="btn btn-mini btn-black" onclick="downloadPDF()">下載 PDF</button>
+        <button class="btn btn-mini btn-outline" onclick="closeCert()">收起</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- jsPDF (CDN) for PDF download -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+  // ===================== DATA =====================
+  const routesData = {
+    hk: {
+      name: "港島綫",
+      sub: "共 3 個站點（逐站解鎖問答）",
+      stations: [
+        {
+          name: "站點 1：中環摩天輪",
+          destination: "中環海濱摩天輪正下方",
+          imgAlt: "📷 中環海濱摩天輪",
+          hint: "找一個「圓形、會轉、很高」的裝置；到最接近支柱的位置觀察。",
+          desc: "中環海濱摩天輪位於中環海濱長廊，是欣賞維港景色的熱門地標。",
+          quiz: {
+            q: "摩天輪每個車廂最多可以容納多少人？",
+            options: ["4人","6人","8人","10人"],
+            ans: "8人"
+          }
+        },
+        {
+          name: "站點 2：維多利亞公園",
+          destination: "公園內主要廣場／標誌性銅像附近",
+          imgAlt: "📷 銅鑼灣維多利亞公園",
+          hint: "找一個經常成為集合點的雕像／地標，通常在較空曠位置。",
+          desc: "維多利亞公園是香港最大的市區公園之一，設施完善，亦常舉行大型活動。",
+          quiz: {
+            q: "維多利亞公園中央的女皇銅像，手中拿著什麼？",
+            options: ["權杖","書本","盾牌","地球儀"],
+            ans: "權杖"
+          }
+        },
+        {
+          name: "站點 3：金紫荊廣場",
+          destination: "金色紫荊雕塑附近（海旁方向）",
+          imgAlt: "📷 灣仔金紫荊廣場",
+          hint: "找一朵「金色紫荊」；站到面向維港的方向會更容易定位。",
+          desc: "金紫荊廣場位於灣仔會展新翼海旁，是香港重要的歷史地標之一。",
+          quiz: {
+            q: "金紫荊廣場每天早上會舉行什麼儀式？",
+            options: ["升旗儀式","擊鼓儀式","鳴炮儀式","舞龍儀式"],
+            ans: "升旗儀式"
+          }
+        }
+      ]
+    },
+    nt: {
+      name: "新界綫",
+      sub: "共 3 個站點（逐站解鎖問答）",
+      stations: [
+        {
+          name: "站點 1：沙田車公廟",
+          destination: "車公廟正殿一帶",
+          imgAlt: "📷 沙田車公廟",
+          hint: "找一個很多人會排隊轉動的裝置；通常是金屬製品。",
+          desc: "車公廟是新界著名廟宇，香火鼎盛，善信常以轉動風車祈求好運。",
+          quiz: {
+            q: "善信到訪車公廟時通常會轉動什麼以祈求好運？",
+            options: ["石獅子","銅風車","大鐘","香爐"],
+            ans: "銅風車"
+          }
+        },
+        {
+          name: "站點 2：西貢公眾碼頭",
+          destination: "碼頭長廊一帶",
+          imgAlt: "📷 西貢公眾碼頭",
+          hint: "聞到海風＋看到船隻與碼頭欄杆；沿著長廊走會找到更明顯的地標。",
+          desc: "西貢被稱為香港後花園，碼頭附近海鮮食肆林立，充滿地道漁村風情。",
+          quiz: {
+            q: "西貢最著名的美食是什麼？",
+            options: ["海鮮","燒鵝","盆菜","豆腐花"],
+            ans: "海鮮"
+          }
+        },
+        {
+          name: "站點 3：屯門黃金海岸",
+          destination: "海濱長廊／雕像或拱門附近",
+          imgAlt: "📷 屯門黃金海岸",
+          hint: "找一個很像度假小鎮的地方：淺色牆＋拱形設計＋海邊步道。",
+          desc: "黃金海岸以地中海式建築群聞名，是假日散步、打卡與用餐的熱門地點。",
+          quiz: {
+            q: "黃金海岸的建築群以哪種風格為主？",
+            options: ["中式","日式","地中海式","英式"],
+            ans: "地中海式"
+          }
+        }
+      ]
+    }
+  };
+
+  // ===================== STATE =====================
+  let state = {
+    playerName: "",
+    routeKey: null,
+    stationIndex: 0,
+    // progress: completed station count for each route, used to unlock quizzes
+    progress: { hk: 0, nt: 0 }
+  };
+
+  // ===================== UTIL: smooth page transition =====================
+  function goToPage(pageId){
+    const current = document.querySelector('.page.active');
+    const next = document.getElementById(pageId);
+    if (!next) return;
+
+    if (current && current !== next){
+      current.classList.add('exiting');
+      setTimeout(() => {
+        current.classList.remove('active','exiting');
+        next.classList.add('active');
+        next.scrollTop = 0;
+      }, 210);
+    } else {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active','exiting'));
+      next.classList.add('active');
+      next.scrollTop = 0;
+    }
+  }
+
+  function goHome(){
+    goToPage(state.playerName ? 'page-home' : 'page-gate');
+  }
+
+  // ===================== NAME GATE =====================
+  function enterSite(){
+    const input = document.getElementById('player-name');
+    const name = (input.value || "").trim();
+    state.playerName = name || "參加者";
+    goToPage('page-home');
+  }
+
+  // ===================== ROUTE / LIST =====================
+  function selectRoute(key){
+    state.routeKey = key;
+    state.stationIndex = 0;
+
+    const data = routesData[key];
+    document.getElementById('list-route-name').textContent = data.name;
+    document.getElementById('list-route-sub').textContent = data.sub;
+
+    const container = document.getElementById('station-list-container');
+    container.innerHTML = "";
+
+    data.stations.forEach((s, i) => {
+      const item = document.createElement('div');
+      item.className = 'station-item';
+      item.onclick = () => openStation(i);
+
+      const completedCount = state.progress[key];
+      const isQuizUnlocked = (i === 0) ? true : (completedCount >= i); // station i quiz requires previous station completed
+      const lockLabel = isQuizUnlocked ? "✅ 問答可解鎖" : "🔒 問答未解鎖";
+
+      item.innerHTML = `
+        <div class="station-num">${i+1}</div>
+        <div>
+          <p class="station-title">${s.name}</p>
+          <p class="station-sub">${lockLabel}</p>
+        </div>
+        <div class="arrow">›</div>
+      `;
+      container.appendChild(item);
+    });
+
+    goToPage('page-station-list');
+  }
+
+  // ===================== STATION DETAIL (LOCK SYSTEM) =====================
+  function openStation(index){
+    state.stationIndex = index;
+    const route = routesData[state.routeKey];
+    const s = route.stations[index];
+
+    document.getElementById('detail-img-alt').textContent = s.imgAlt;
+    document.getElementById('detail-name').textContent = s.name;
+    document.getElementById('detail-destination').textContent = "目的地：" + s.destination;
+    document.getElementById('detail-hint').textContent = s.hint;
+    document.getElementById('detail-desc').textContent = s.desc;
+
+    // Build quiz options (A-D) with random shuffle, and ensure D is present
+    const quizWrap = document.getElementById('quiz-options-wrap');
+    quizWrap.innerHTML = "";
+
+    const shuffled = shuffleArray([...s.quiz.options]); // original 4 options
+    // Ensure 4 options exactly; if data provided less, fill random placeholders (shouldn't happen here)
+    while (shuffled.length < 4) shuffled.push("隨機選項");
+    if (shuffled.length > 4) shuffled.length = 4;
+
+    const letters = ["A","B","C","D"];
+    shuffled.forEach((optText, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'opt';
+      btn.dataset.value = optText;
+      btn.textContent = `${letters[i]}.  ${optText}`;
+      btn.onclick = () => handleAnswer(btn, s.quiz.ans);
+      quizWrap.appendChild(btn);
+    });
+
+    // Lock logic: you can enter any station, but quiz locks if previous station not completed
+    const completedCount = state.progress[state.routeKey];
+    const unlocked = (index === 0) ? true : (completedCount >= index);
+    applyLockState(unlocked);
+
+    // Reset feedback and buttons
+    setFeedback("", "");
+    document.getElementById('btn-next-station').classList.add('hidden');
+    document.getElementById('btn-finish').classList.add('hidden');
+
+    goToPage('page-station-detail');
+  }
+
+  function applyLockState(unlocked){
+    const scope = document.getElementById('detail-lock-scope');
+    const banner = document.getElementById('lock-banner');
+    if (!unlocked){
+      document.getElementById('page-station-detail').classList.add('locked');
+      banner.style.display = 'block';
+      setFeedback("🔒 未解鎖：請先完成上一個站點的問答", "lock");
+      // disable options
+      document.querySelectorAll('.opt').forEach(b => {
+        b.classList.add('disabled');
+        b.onclick = null;
+      });
+    } else {
+      document.getElementById('page-station-detail').classList.remove('locked');
+      banner.style.display = 'none';
+    }
+  }
+
+  // ===================== QUIZ (only correct option selectable) =====================
+  function handleAnswer(btn, correctText){
+    // Only allow selecting correct answer:
+    const chosen = btn.dataset.value;
+
+    // If not correct: do nothing (as required)
+    if (chosen !== correctText) return;
+
+    // Mark correct, disable all
+    btn.classList.add('correct');
+    document.querySelectorAll('.opt').forEach(b => {
+      b.onclick = null;
+      if (b !== btn) b.classList.add('disabled');
+    });
+
+    setFeedback("✅ 答對了！已通關此站。", "ok");
+
+    // Update progress
+    const key = state.routeKey;
+    const idx = state.stationIndex;
+    if (state.progress[key] < idx + 1) state.progress[key] = idx + 1;
+
+    const total = routesData[key].stations.length;
+    if (idx < total - 1){
+      document.getElementById('btn-next-station').classList.remove('hidden');
+    } else {
+      document.getElementById('btn-finish').classList.remove('hidden');
+    }
+  }
+
+  function setFeedback(text, type){
+    const el = document.getElementById('quiz-feedback');
+    el.textContent = text || "";
+    el.className = 'feedback' + (type ? (' ' + type) : '');
+  }
+
+  function goNextStation(){
+    openStation(state.stationIndex + 1);
+  }
+
+  // ===================== FINISH / CERT =====================
+  function goToFinish(){
+    const routeName = routesData[state.routeKey].name;
+    document.getElementById('finish-msg').textContent =
+      `${state.playerName}，你已完成「${routeName}」所有站點！`;
+
+    goToPage('page-finish');
+  }
+
+  function openCert(){
+    const routeName = routesData[state.routeKey].name;
+    document.getElementById('cert-name').textContent = state.playerName || "參加者";
+    document.getElementById('cert-route').textContent = routeName;
+    document.getElementById('cert-date').textContent = "日期：2026 / xx / xx";
+    document.getElementById('cert-modal').classList.add('active');
+  }
+
+  function closeCert(){
+    document.getElementById('cert-modal').classList.remove('active');
+  }
+
+  function downloadPDF(){
+    // Requires jsPDF
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF){
+      alert("PDF 模組未載入，請檢查網絡或 CDN。");
+      return;
+    }
+
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const name = (state.playerName || "參加者").trim();
+    const route = routesData[state.routeKey]?.name || "路線";
+    const date = "2026 / xx / xx";
+
+    // Simple certificate layout
+    doc.setFillColor(255, 253, 240);
+    doc.rect(0, 0, 595, 842, "F");
+
+    // Border
+    doc.setDrawColor(251, 191, 22);
+    doc.setLineWidth(6);
+    doc.rect(40, 50, 515, 742);
+
+    doc.setLineWidth(1);
+    doc.setDrawColor(251, 191, 22);
+    doc.setLineDash([6,6], 0);
+    doc.rect(60, 70, 475, 702);
+
+    doc.setLineDash([], 0);
+
+    // Title
+    doc.setTextColor(20,20,20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("MAVIS LAB", 297.5, 125, { align: "center" });
+
+    doc.setFontSize(28);
+    doc.text("完成證書", 297.5, 170, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.setTextColor(120,120,120);
+    doc.text("CERTIFICATE OF COMPLETION", 297.5, 195, { align: "center" });
+
+    // Body
+    doc.setTextColor(40,40,40);
+    doc.setFontSize(14);
+    doc.text("茲證明", 297.5, 270, { align: "center" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.text(name, 297.5, 310, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(14);
+    doc.text("已成功完成", 297.5, 350, { align: "center" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(route, 297.5, 380, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(14);
+    doc.text("全部挑戰站點", 297.5, 410, { align: "center" });
+
+    // Stamp
+    doc.setDrawColor(238, 41, 34);
+    doc.setLineWidth(3);
+    doc.circle(297.5, 520, 45);
+    doc.setTextColor(238,41,34);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("MAVIS", 297.5, 510, { align: "center" });
+    doc.text("LAB", 297.5, 525, { align: "center" });
+    doc.text("認證", 297.5, 540, { align: "center" });
+
+    // Date
+    doc.setTextColor(140,140,140);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(12);
+    doc.text("日期：" + date, 297.5, 620, { align: "center" });
+
+    const filename = `MavisLab_證書_${name}.pdf`;
+    doc.save(filename);
+  }
+
+  // ===================== HELPERS =====================
+  function shuffleArray(arr){
+    for (let i = arr.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+</script>
+</body>
+</html>
